@@ -1,11 +1,16 @@
-﻿open System.Windows
-open System.Threading
-open System.Diagnostics
-
-open Vide
-open type Widgets
+﻿open Vide
+open type Api.Widgets
 
 vide {
-    TextBlock("Hello World")
+    let! count = Mutable.ofValue 0
+
+    StackPanel {
+        TextBlock {
+            $"Count = {count.Value}"
+        }
+
+        Button.Click(fun _ -> count -= 1) { "dec" }
+        Button.Click(fun _ -> count += 1) { "inc" }
+    }
 }
 |> startApp

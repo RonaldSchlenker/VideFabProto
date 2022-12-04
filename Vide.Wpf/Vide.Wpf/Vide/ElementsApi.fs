@@ -3,7 +3,6 @@
 open System.Windows
 open System.Windows.Controls
 open Vide
-open type Control
 
 module Node =
     let inline create<'n,'b
@@ -26,25 +25,25 @@ module Node =
                 DiscardAndCreateNew
         createBuilder(create, update)
 
-type ButtonBuilder(createNode, updateNode) =
-    inherit NodeBuilder<Button>(createNode, updateNode)
-type TextBlockBuilder(createNode, updateNode) =
-    inherit NodeBuilder<TextBlock>(createNode, updateNode)
-type StackPanelBuilder(createNode, updateNode) =
-    inherit NodeBuilder<StackPanel>(createNode, updateNode)
+[<AutoOpen>]
+module Api =
+    type ButtonBuilder(createNode, updateNode) =
+        inherit NodeBuilder<Button>(createNode, updateNode)
+        member inline this.Click(handler) = this.AddInitOnlyModifier(fun x -> x.Click.Add(handler))
 
-// open type (why? -> We need always a new builder on property access)
-type Widgets =
-    // TODO: This is something special
-    static member inline Nothing =
-        NodeBuilder(
-            (fun ctx -> UIElement()),
-            (fun node -> Keep))
-    static member inline Button = Node.create (fun () -> Button()) ButtonBuilder
-    static member inline TextBlock text = Node.create (fun () -> TextBlock(Text = text)) TextBlockBuilder
-    static member inline StackPanel = Node.create (fun () -> StackPanel()) StackPanelBuilder
+    type TextBlockBuilder(createNode, updateNode) =
+        inherit NodeBuilder<TextBlock>(createNode, updateNode)
+        member inline this.Text(value) = this.AddModifier(fun x -> x.Text <- value)
 
-    // TODO: Yield should work for strings
+    type StackPanelBuilder(createNode, updateNode) =
+        inherit NodeBuilder<StackPanel>(createNode, updateNode)
+
+    // "register" widgets (aka concrete builders)
+    // open type (why? -> We need always a new builder on property access)
+    type Widgets =
+        static member inline Button = Node.create Button ButtonBuilder
+        static member inline TextBlock = Node.create TextBlock TextBlockBuilder
+        static member inline StackPanel = Node.create StackPanel StackPanelBuilder
 
 [<AutoOpen>]
 module VideBuilderExtensions =
@@ -70,4 +69,4 @@ module VideBuilderExtensions =
         member inline _.Yield
             (x: string)
             =
-            Widgets.TextBlock(x) { () } |> map ignore
+            Widgets.TextBlock.Text(x) { () } |> map ignore

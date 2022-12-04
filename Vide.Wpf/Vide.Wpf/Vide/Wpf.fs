@@ -91,24 +91,23 @@ let inline ( /= ) mutVal x = Mutable.change (/) mutVal x
 let inline ( := ) (mutVal: Mutable.MutableValue<_>) x = mutVal.Value <- x
 
 // TODO: Don't box values
-type AttributeList = list<string * obj>
+type Modifier<'n> = 'n -> unit
 
 type NodeBuilderState<'n,'s when 'n :> DependencyObject> = option<'n> * option<'s>
 
 type NodeSyncResult = Keep | DiscardAndCreateNew
 
-type NodeBuilder<'n when 'n :> Node>(newNode, checkOrUpdateNode) =
+type NodeBuilder<'n when 'n :> Node>(createNode, checkOrUpdateNode) =
     inherit VideBuilder()
-    member val Attributes: AttributeList = [] with get, set
-    //member val Events: EventList = [] with get, set
+    let mutable modifiers: Modifier<'n> list = []
+    let mutable initOnlyModifiers: Modifier<'n> list = []
     member this.Run
         (Vide childVide: Vide<unit,'fs,Context>)
         : Vide<'n, NodeBuilderState<'n,'fs>, Context>
         =
-        let syncAttrs (node: Node) =
-            for name,value in this.Attributes do
-                // TODO: Reflection!
-                node.GetType().GetProperty(name).SetValue(node, value)
+        let runModifiers modifiers node =
+            for x in modifiers do
+                x node
         // TODO
         //let syncEvents (node: Node) =
         //    for name,handler in this.Events do
@@ -119,16 +118,17 @@ type NodeBuilder<'n when 'n :> Node>(newNode, checkOrUpdateNode) =
             let node,cs =
                 match s with
                 | None ->
-                    newNode ctx,cs
+                    let newNode,s = createNode ctx,cs
+                    do newNode |> runModifiers initOnlyModifiers
+                    newNode,s
                 | Some node ->
                     match checkOrUpdateNode node with
                     | Keep ->
                         ctx.elementsContext.KeepChild(node)
                         node,cs
                     | DiscardAndCreateNew ->
-                        newNode ctx,None
-            do syncAttrs node
-            //do syncEvents node
+                        createNode ctx,None
+            do runModifiers modifiers node
             let childCtx =
                 {
                     node = node
@@ -141,13 +141,12 @@ type NodeBuilder<'n when 'n :> Node>(newNode, checkOrUpdateNode) =
                 // we don'tneed this? Weak enough?
                 // events.RemoveListener(node)
             node, Some (Some node, cs)
-    member inline this.attrCond(name, value: obj) =
-        do this.Attributes <- (name, value) :: this.Attributes
-    // TODO
-    //member this.on(name, handler: EventHandler) =
-    //    failwith "TODO"
-    //    //do this.Events <- (name, handler) :: this.Events
-    //    //this
+    member this.AddModifier(m: Modifier<'n>) =
+        do modifiers <- m :: modifiers
+        this
+    member this.AddInitOnlyModifier(m: Modifier<'n>) =
+        do initOnlyModifiers <- m :: initOnlyModifiers
+        this
 
 type RootBuilder<'n when 'n :> Node>(holder) =
     inherit NodeBuilder<'n>(
